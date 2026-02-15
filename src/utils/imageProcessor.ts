@@ -60,6 +60,9 @@ export async function processImage(
 
             ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 
+            // Use 1.0 quality for WebP to signal lossless/best quality to the browser
+            const quality = options.format === 'image/webp' ? 1.0 : (options.quality || 0.92);
+
             canvas.toBlob(
                 (blob) => {
                     if (!blob) {
@@ -78,7 +81,7 @@ export async function processImage(
                     });
                 },
                 options.format,
-                options.quality || 0.9
+                quality
             );
         };
 
