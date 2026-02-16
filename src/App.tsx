@@ -14,10 +14,11 @@ interface ImageFile {
 
 export default function App() {
     const [images, setImages] = useState<ImageFile[]>([]);
-    const [resizeMode, setResizeMode] = useState<'pixels' | 'percentage'>('percentage');
-    const [globalValue, setGlobalValue] = useState<number>(100);
+    const [resizeMode, setResizeMode] = useState<'pixels' | 'percentage'>('pixels');
+    const [globalValue, setGlobalValue] = useState<number>(1280);
     const [targetFormat, setTargetFormat] = useState<ImageFormat>('image/webp');
     const [isProcessing, setIsProcessing] = useState(false);
+    const [aiUpscale, setAiUpscale] = useState(false);
 
     const onDrop = useCallback((e: React.DragEvent | React.ChangeEvent<HTMLInputElement>) => {
         e.preventDefault();
@@ -61,6 +62,7 @@ export default function App() {
                     format: targetFormat,
                     percentage: resizeMode === 'percentage' ? globalValue : undefined,
                     width: resizeMode === 'pixels' ? globalValue : undefined,
+                    upscale: aiUpscale,
                 };
 
                 const processed = await processImage(img.file, options);
@@ -78,9 +80,26 @@ export default function App() {
         setIsProcessing(false);
     };
 
-    const downloadZip = async () => {
+    const downloadImages = async () => {
+        const processedImages = images.filter(img => img.status === 'done' && img.processed);
+
+        if (processedImages.length === 0) return;
+
+        if (processedImages.length === 1) {
+            const img = processedImages[0];
+            if (img.processed) {
+                const url = URL.createObjectURL(img.processed.blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = img.processed.name;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+            return;
+        }
+
         const zip = new JSZip();
-        images.forEach(img => {
+        processedImages.forEach(img => {
             if (img.processed) {
                 zip.file(img.processed.name, img.processed.blob);
             }
@@ -91,6 +110,7 @@ export default function App() {
         a.href = url;
         a.download = 'resampled-images.zip';
         a.click();
+        URL.revokeObjectURL(url);
     };
 
     return (
@@ -165,6 +185,14 @@ export default function App() {
                             <option value="image/png">PNG</option>
                             <option value="image/jpeg">JPEG</option>
                         </select>
+
+                        <button
+                            onClick={() => setAiUpscale(!aiUpscale)}
+                            className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border transition-all ${aiUpscale ? 'bg-purple-600/20 border-purple-500 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.2)]' : 'bg-zinc-900/50 border-zinc-800 text-zinc-500 hover:text-zinc-400'}`}
+                        >
+                            <div className={`w-2 h-2 rounded-full ${aiUpscale ? 'bg-purple-400 animate-pulse' : 'bg-zinc-600'}`} />
+                            <span className="text-sm font-medium">AI Upscale</span>
+                        </button>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -182,12 +210,12 @@ export default function App() {
                         </button>
 
                         <button
-                            onClick={downloadZip}
+                            onClick={downloadImages}
                             disabled={images.filter(i => i.status === 'done').length === 0}
                             className="flex items-center space-x-2 px-6 py-2.5 rounded-xl bg-zinc-100 text-zinc-900 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-all font-semibold"
                         >
                             <Download size={20} />
-                            <span>Download Zip</span>
+                            <span>{images.filter(i => i.status === 'done').length === 1 ? 'Download Image' : 'Download Zip'}</span>
                         </button>
                     </div>
                 </div>

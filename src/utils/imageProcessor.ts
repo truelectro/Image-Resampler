@@ -1,3 +1,5 @@
+import Upscaler from 'upscaler';
+
 export type ImageFormat = 'image/png' | 'image/jpeg' | 'image/webp';
 
 export interface ResizeOptions {
@@ -6,6 +8,7 @@ export interface ResizeOptions {
     percentage?: number;
     format: ImageFormat;
     quality?: number;
+    upscale?: boolean;
 }
 
 export interface ProcessedImage {
@@ -22,6 +25,15 @@ export async function processImage(
     file: File,
     options: ResizeOptions
 ): Promise<ProcessedImage> {
+    const sourceUrl = URL.createObjectURL(file);
+
+    let imgSource: string | HTMLImageElement = sourceUrl;
+
+    if (options.upscale) {
+        const upscaler = new Upscaler();
+        imgSource = await upscaler.upscale(sourceUrl);
+    }
+
     return new Promise((resolve, reject) => {
         const img = new Image();
         img.onload = () => {
@@ -67,8 +79,9 @@ export async function processImage(
                         return;
                     }
                     const previewUrl = URL.createObjectURL(blob);
+                    const nameSuffix = options.upscale ? " (AI Upscaled)" : "";
                     resolve({
-                        name: file.name.replace(/\.[^/.]+$/, "") + getExtension(options.format),
+                        name: file.name.replace(/\.[^/.]+$/, "") + nameSuffix + getExtension(options.format),
                         blob,
                         previewUrl,
                         originalWidth: img.width,
@@ -80,10 +93,18 @@ export async function processImage(
                 options.format,
                 options.quality || 0.9
             );
+            if (options.upscale) {
+                // imgSource is a data URL if upscaled
+            } else {
+                URL.revokeObjectURL(sourceUrl);
+            }
         };
 
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = URL.createObjectURL(file);
+        img.onerror = () => {
+            URL.revokeObjectURL(sourceUrl);
+            reject(new Error('Failed to load image'));
+        };
+        img.src = typeof imgSource === 'string' ? imgSource : (imgSource as any).src;
     });
 }
 
